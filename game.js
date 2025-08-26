@@ -1,3 +1,27 @@
+Awesome — glad it's working now! Let's add the **dash mechanic** you described:
+
+---
+
+## ✅ Feature: Dash Ability
+
+* **Press Shift** to dash in your movement direction
+* **Cooldown**: 2 seconds
+* **Duration**: very short burst (e.g. 150ms)
+* **Visual cooldown bar** under health bar
+* **Dash passes through enemies**
+
+---
+
+## ✅ Just Replace Your `game.js` With This Version
+
+Here’s the updated code, including:
+
+* Dash state
+* Dash movement
+* Dash cooldown tracking
+* Dash bar under health
+
+```javascript
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
@@ -10,10 +34,16 @@ const player = {
   y: canvas.height / 2,
   size: 20,
   speed: 2.5,
+  dashSpeed: 7,
   color: "#4af",
   health: 5,
   maxHealth: 5,
-  angle: 0
+  angle: 0,
+  isDashing: false,
+  dashTime: 0,
+  dashCooldown: 0,
+  dashDuration: 150, // milliseconds
+  dashCooldownMax: 2000 // milliseconds
 };
 
 const bullets = [];
@@ -79,11 +109,33 @@ canvas.addEventListener("mousemove", (e) => {
 });
 
 function update(dt) {
-  // Player movement
-  if (keys["w"]) player.y -= player.speed;
-  if (keys["s"]) player.y += player.speed;
-  if (keys["a"]) player.x -= player.speed;
-  if (keys["d"]) player.x += player.speed;
+  const moveX = (keys["a"] ? -1 : 0) + (keys["d"] ? 1 : 0);
+  const moveY = (keys["w"] ? -1 : 0) + (keys["s"] ? 1 : 0);
+  const length = Math.hypot(moveX, moveY) || 1;
+
+  // Dash logic
+  if (keys["shift"] && player.dashCooldown <= 0 && !player.isDashing) {
+    player.isDashing = true;
+    player.dashTime = player.dashDuration;
+    player.dashCooldown = player.dashCooldownMax;
+  }
+
+  if (player.isDashing) {
+    player.x += (moveX / length) * player.dashSpeed;
+    player.y += (moveY / length) * player.dashSpeed;
+    player.dashTime -= dt;
+    if (player.dashTime <= 0) {
+      player.isDashing = false;
+    }
+  } else {
+    player.x += (moveX / length) * player.speed;
+    player.y += (moveY / length) * player.speed;
+  }
+
+  if (player.dashCooldown > 0) {
+    player.dashCooldown -= dt;
+    if (player.dashCooldown < 0) player.dashCooldown = 0;
+  }
 
   // Shooting
   if (keys[" "]) {
@@ -93,7 +145,7 @@ function update(dt) {
     }
   }
 
-  // Update bullets
+  // Bullets
   bullets.forEach((b, i) => {
     b.x += b.dx;
     b.y += b.dy;
@@ -102,14 +154,13 @@ function update(dt) {
     }
   });
 
-  // Spawn enemies
+  // Enemies
   enemySpawnTimer += dt;
   if (enemySpawnTimer > 2000) {
     spawnEnemy();
     enemySpawnTimer = 0;
   }
 
-  // Update enemies
   enemies.forEach((e, i) => {
     const dx = player.x - e.x;
     const dy = player.y - e.y;
@@ -117,22 +168,19 @@ function update(dt) {
     e.x += (dx / dist) * e.speed;
     e.y += (dy / dist) * e.speed;
 
-    // Bullet hit
     bullets.forEach((b, j) => {
       if (Math.abs(b.x - e.x) < e.size && Math.abs(b.y - e.y) < e.size) {
         e.hp -= 1;
         bullets.splice(j, 1);
         if (e.hp <= 0) {
           enemies.splice(i, 1);
-          if (Math.random() < 0.5) {
-            spawnPickup(e.x, e.y);
-          }
+          if (Math.random() < 0.5) spawnPickup(e.x, e.y);
         }
       }
     });
 
-    // Player collision
-    if (Math.abs(player.x - e.x) < player.size && Math.abs(player.y - e.y) < player.size) {
+    // Only damage if not dashing
+    if (!player.isDashing && Math.abs(player.x - e.x) < player.size && Math.abs(player.y - e.y) < player.size) {
       player.health -= 0.01 * dt;
       if (player.health <= 0) {
         alert("Game Over!");
@@ -155,7 +203,6 @@ function update(dt) {
         const overlap = (minDist - dist) / 2;
         const offsetX = (dx / dist) * overlap;
         const offsetY = (dy / dist) * overlap;
-
         a.x -= offsetX;
         a.y -= offsetY;
         b.x += offsetX;
@@ -227,20 +274,4 @@ function draw() {
   ctx.fillStyle = "red";
   ctx.fillRect(10, 10, 100, 10);
   ctx.fillStyle = "lime";
-  ctx.fillRect(10, 10, (player.health / player.maxHealth) * 100, 10);
-  ctx.strokeStyle = "#000";
-  ctx.strokeRect(10, 10, 100, 10);
-}
-
-let lastTime = performance.now();
-function gameLoop(timestamp) {
-  const dt = timestamp - lastTime;
-  lastTime = timestamp;
-
-  update(dt);
-  draw();
-
-  requestAnimationFrame(gameLoop);
-}
-
-requestAnimationFrame(gameLoop);
+```
