@@ -117,7 +117,7 @@ function update(dt) {
     e.x += (dx / dist) * e.speed;
     e.y += (dy / dist) * e.speed;
 
-    // Enemy hit by bullet
+    // Bullet hit
     bullets.forEach((b, j) => {
       if (Math.abs(b.x - e.x) < e.size && Math.abs(b.y - e.y) < e.size) {
         e.hp -= 1;
@@ -131,7 +131,7 @@ function update(dt) {
       }
     });
 
-    // Enemy damages player
+    // Player collision
     if (Math.abs(player.x - e.x) < player.size && Math.abs(player.y - e.y) < player.size) {
       player.health -= 0.01 * dt;
       if (player.health <= 0) {
@@ -141,7 +141,30 @@ function update(dt) {
     }
   });
 
-  // Pickup logic
+  // Enemy-enemy collisions
+  for (let i = 0; i < enemies.length; i++) {
+    for (let j = i + 1; j < enemies.length; j++) {
+      const a = enemies[i];
+      const b = enemies[j];
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const dist = Math.hypot(dx, dy);
+      const minDist = a.size;
+
+      if (dist < minDist && dist !== 0) {
+        const overlap = (minDist - dist) / 2;
+        const offsetX = (dx / dist) * overlap;
+        const offsetY = (dy / dist) * overlap;
+
+        a.x -= offsetX;
+        a.y -= offsetY;
+        b.x += offsetX;
+        b.y += offsetY;
+      }
+    }
+  }
+
+  // Pickups
   tooltip = null;
   pickups.forEach((p, i) => {
     const dx = player.x - p.x;
