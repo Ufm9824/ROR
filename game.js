@@ -2,19 +2,24 @@ const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
 const keys = {};
-document.addEventListener("keydown", (e) => keys[e.key] = true);
-document.addEventListener("keyup", (e) => keys[e.key] = false);
+document.addEventListener("keydown", (e) => keys[e.key.toLowerCase()] = true);
+document.addEventListener("keyup", (e) => keys[e.key.toLowerCase()] = false);
 
 const player = {
   x: canvas.width / 2,
   y: canvas.height / 2,
   size: 20,
   speed: 2.5,
-  color: "#4af"
+  color: "#4af",
+  health: 5,
+  maxHealth: 5,
+  angle: 0
 };
 
 const bullets = [];
 const enemies = [];
+const pickups = [];
+let tooltip = null;
 
 function shootBullet() {
   bullets.push({
@@ -37,8 +42,41 @@ function spawnEnemy() {
   enemies.push({ x, y, size: 20, speed: 1.2, color: "#f44", hp: 3 });
 }
 
+function spawnPickup(x, y) {
+  const types = [
+    {
+      name: "Health Pack",
+      effect: "Restore 1 health",
+      apply: () => { if (player.health < player.maxHealth) player.health++; },
+      color: "#0f0"
+    },
+    {
+      name: "Speed Boost",
+      effect: "Increase speed",
+      apply: () => { player.speed += 0.5; },
+      color: "#0ff"
+    },
+  ];
+
+  const type = types[Math.floor(Math.random() * types.length)];
+
+  pickups.push({
+    x,
+    y,
+    size: 15,
+    ...type
+  });
+}
+
 let lastShot = 0;
 let enemySpawnTimer = 0;
+
+canvas.addEventListener("mousemove", (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const mouseX = e.clientX - rect.left;
+  const mouseY = e.clientY - rect.top;
+  player.angle = Math.atan2(mouseY - player.y, mouseX - player.x);
+});
 
 function update(dt) {
   // Player movement
@@ -46,14 +84,6 @@ function update(dt) {
   if (keys["s"]) player.y += player.speed;
   if (keys["a"]) player.x -= player.speed;
   if (keys["d"]) player.x += player.speed;
-
-  // Aim at mouse
-  canvas.onmousemove = (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-    player.angle = Math.atan2(mouseY - player.y, mouseX - player.x);
-  };
 
   // Shooting
   if (keys[" "]) {
@@ -67,8 +97,6 @@ function update(dt) {
   bullets.forEach((b, i) => {
     b.x += b.dx;
     b.y += b.dy;
-
-    // Remove if out of bounds
     if (b.x < 0 || b.y < 0 || b.x > canvas.width || b.y > canvas.height) {
       bullets.splice(i, 1);
     }
@@ -89,14 +117,44 @@ function update(dt) {
     e.x += (dx / dist) * e.speed;
     e.y += (dy / dist) * e.speed;
 
-    // Collision with bullets
+    // Enemy hit by bullet
     bullets.forEach((b, j) => {
       if (Math.abs(b.x - e.x) < e.size && Math.abs(b.y - e.y) < e.size) {
         e.hp -= 1;
         bullets.splice(j, 1);
-        if (e.hp <= 0) enemies.splice(i, 1);
+        if (e.hp <= 0) {
+          enemies.splice(i, 1);
+          if (Math.random() < 0.5) {
+            spawnPickup(e.x, e.y);
+          }
+        }
       }
     });
+
+    // Enemy damages player
+    if (Math.abs(player.x - e.x) < player.size && Math.abs(player.y - e.y) < player.size) {
+      player.health -= 0.01 * dt;
+      if (player.health <= 0) {
+        alert("Game Over!");
+        window.location.reload();
+      }
+    }
+  });
+
+  // Pickup logic
+  tooltip = null;
+  pickups.forEach((p, i) => {
+    const dx = player.x - p.x;
+    const dy = player.y - p.y;
+    const dist = Math.hypot(dx, dy);
+
+    if (dist < player.size + p.size) {
+      tooltip = `${p.name}: ${p.effect}`;
+      if (keys["e"]) {
+        p.apply();
+        pickups.splice(i, 1);
+      }
+    }
   });
 }
 
@@ -126,6 +184,29 @@ function draw() {
     ctx.arc(e.x, e.y, e.size, 0, Math.PI * 2);
     ctx.fill();
   });
+
+  // Pickups
+  pickups.forEach(p => {
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // Tooltip
+  if (tooltip) {
+    ctx.fillStyle = "#fff";
+    ctx.font = "16px Arial";
+    ctx.fillText(tooltip + " (Press E)", 10, canvas.height - 20);
+  }
+
+  // Health bar
+  ctx.fillStyle = "red";
+  ctx.fillRect(10, 10, 100, 10);
+  ctx.fillStyle = "lime";
+  ctx.fillRect(10, 10, (player.health / player.maxHealth) * 100, 10);
+  ctx.strokeStyle = "#000";
+  ctx.strokeRect(10, 10, 100, 10);
 }
 
 let lastTime = performance.now();
