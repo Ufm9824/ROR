@@ -6,10 +6,6 @@ window.addEventListener('DOMContentLoaded', () => {
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-const canvas = document.getElementById("game");
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
-  
 let width, height;
 function resize() {
   width = window.innerWidth;
@@ -20,6 +16,10 @@ function resize() {
 resize();
 window.addEventListener("resize", resize);
 
+const canvas = document.getElementById("game");
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+  
 // == Globals ==
 const player = {
   x: width / 2,
