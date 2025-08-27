@@ -163,39 +163,51 @@ function updateBullets(delta) {
       return;
     }
 
-    // Check collisions with enemies
-    enemies.forEach((e, ei) => {
-      if (distance(b.x, b.y, e.x, e.y) < e.size + b.size) {
-        e.health -= player.attackDamage;
-        stats.damage += player.attackDamage;
-        if (b.exploding) {
-          e.poisoned = false; // No poison if exploding
-          // Damage nearby enemies too
-          enemies.forEach((e2) => {
-            if (e2 !== e && distance(b.x, b.y, e2.x, e2.y) < 50) {
-              e2.health -= player.attackDamage / 2;
-            }
-          });
-        } else if (b.poison) {
-          e.poisoned = true;
-          e.poisonTimer = 3000;
-        }
-
-        bullets.splice(i, 1);
-        if (e.health <= 0) {
-          enemiesKilledThisWave++;
-          stats.kills++;
-          const goldDrop = Math.floor(Math.random() * 16); // 0-15 gold
-          stats.coinsEarned += goldDrop;
-          player.gold += goldDrop;
-
-          if (e.type === "boss") {
-            bossKilledThisWave = true;
+    if (!b.fromEnemy) {
+      // Check collisions with enemies
+      enemies.forEach((e, ei) => {
+        if (distance(b.x, b.y, e.x, e.y) < e.size + b.size) {
+          e.health -= player.attackDamage;
+          stats.damage += player.attackDamage;
+          if (b.exploding) {
+            e.poisoned = false; // No poison if exploding
+            // Damage nearby enemies too
+            enemies.forEach((e2) => {
+              if (e2 !== e && distance(b.x, b.y, e2.x, e2.y) < 50) {
+                e2.health -= player.attackDamage / 2;
+              }
+            });
+          } else if (b.poison) {
+            e.poisoned = true;
+            e.poisonTimer = 3000;
           }
-          enemies.splice(ei, 1);
+
+          bullets.splice(i, 1);
+          if (e.health <= 0) {
+            enemiesKilledThisWave++;
+            stats.kills++;
+            const goldDrop = Math.floor(Math.random() * 16); // 0-15 gold
+            stats.coinsEarned += goldDrop;
+            player.gold += goldDrop;
+
+            if (e.type === "boss") {
+              bossKilledThisWave = true;
+            }
+            enemies.splice(ei, 1);
+          }
+        }
+      });
+    } else {
+      // Bullet from enemy, check collision with player
+      if (distance(b.x, b.y, player.x, player.y) < player.size + b.size) {
+        player.health -= 10;
+        bullets.splice(i, 1);
+        if (player.health <= 0) {
+          gameOver = true;
+          showEndScreen = true;
         }
       }
-    });
+    }
 
     if (b.x < 0 || b.x > width || b.y < 0 || b.y > height) {
       bullets.splice(i, 1);
@@ -303,9 +315,19 @@ function updatePickups(delta) {
 // == Chest update ==
 function updateChests(delta) {
   chests.forEach((c) => {
-    if (distance(player.x, player.y, c.x, c.y) < 50 && keys["e"]) {
-      if (!c.opened && player.gold >= chestCost) {
-        openChest(c);
+    if (distance(player.x, player.y, c.x, c.y) < 50) {
+      if (!c.opened) {
+        ctx.fillStyle = "white";
+        ctx.font = "16px Arial";
+        ctx.fillText(
+          "Press E to open chest (Cost: " + chestCost + " gold)",
+          c.x - 80,
+          c.y - 40
+        );
+
+        if (keys["e"] && player.gold >= chestCost) {
+          openChest(c);
+        }
       }
     }
   });
@@ -424,10 +446,10 @@ function openChest(chest) {
 
 // == Portal spawn ==
 function spawnPortal(x, y) {
-  portal = { x, y, w: 80, h: 120 };
+  portal = { x, y, w: 80, h: 120, animationTime: 0 };
 }
 
-// == Update function ==
+// == Wave and spawn control ==
 let lastSpawnTime = 0;
 function update(delta) {
   if (gameOver) return;
@@ -449,53 +471,243 @@ function update(delta) {
   updateChests(delta);
 
   lastSpawnTime += delta;
-  if (
-    lastSpawnTime > 1500 &&
-    enemies.length < enemiesToSpawn
-  ) {
-    const enemyTypeRoll = Math.random();
+  if (lastSpawnTime > 1500 && enemies.length < enemiesToSpawn) {
     if (
       wave % 10 === 0 &&
       enemies.filter((e) => e.type === "boss").length === 0 &&
       !bossKilledThisWave
     ) {
       spawnEnemy("boss");
-    } else if (enemyTypeRoll < 0.3) spawnEnemy("fast");
-    else if (enemyTypeRoll < 0.6) spawnEnemy("tank");
-    else spawnEnemy("ranged");
+    } else {
+      const enemyTypeRoll = Math.random();
+      if (enemyTypeRoll < 0.3) spawnEnemy("fast");
+      else if (enemyTypeRoll < 0.6) spawnEnemy("tank");
+      else spawnEnemy("ranged");
+    }
     lastSpawnTime = 0;
   }
 
-  // Spawn portal only after boss killed this wave
+  // Spawn portal after boss kill
   if (bossKilledThisWave && !portal) {
     spawnPortal(width / 2, height / 2);
   }
+
+  // Spawn up to 3 chests rarely
+  if (Math.random() < 0.002 && chests.length < 3 && !portal) {
+    spawnChest();
+  }
+
+  // Check if wave is complete
+  if (
+    enemiesKilledThisWave >= enemiesToSpawn + (wave > 10 ? (wave - 10) * 2 : 0) &&
+    !bossKilledThisWave
+  ) {
+    wave++;
+    enemiesKilledThisWave = 0;
+    enemiesToSpawn += 3;
+    bossKilledThisWave = false;
+    chestCost = 25;
+
+    // Clear enemies and pickups to prepare next wave
+    enemies.length = 0;
+    pickups.length = 0;
+    chests.length = 0;
+  }
 }
 
-// == Pickup effect ==
+// == Draw everything ==
+function draw() {
+  // Background
+  ctx.fillStyle = "#222";
+  ctx.fillRect(0, 0, width, height);
+
+  // Draw walls - simple border
+  ctx.strokeStyle = "#555";
+  ctx.lineWidth = 10;
+  ctx.strokeRect(40, 40, width - 80, height - 80);
+
+  // Draw portal
+  if (portal) {
+    portal.animationTime += 0.05;
+    const pulse = Math.sin(portal.animationTime) * 10;
+    ctx.fillStyle = "#00f";
+    ctx.beginPath();
+    ctx.ellipse(
+      portal.x,
+      portal.y,
+      portal.w / 2 + pulse,
+      portal.h / 2 + pulse,
+      0,
+      0,
+      2 * Math.PI
+    );
+    ctx.fill();
+  }
+
+  // Draw player
+  ctx.save();
+  ctx.translate(player.x, player.y);
+  ctx.rotate(player.angle);
+  ctx.fillStyle = "lime";
+  ctx.beginPath();
+  ctx.moveTo(player.size, 0);
+  ctx.lineTo(-player.size / 2, player.size / 2);
+  ctx.lineTo(-player.size / 2, -player.size / 2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  // Draw enemies
+  enemies.forEach((e) => {
+    ctx.fillStyle = e.poisoned ? "purple" : e.type === "boss" ? "darkred" : e.type === "tank" ? "brown" : e.type === "fast" ? "orange" : "red";
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, e.size, 0, 2 * Math.PI);
+    ctx.fill();
+
+    // Health bar
+    ctx.fillStyle = "black";
+    ctx.fillRect(e.x - e.size, e.y - e.size - 10, e.size * 2, 5);
+    ctx.fillStyle = "lime";
+    ctx.fillRect(
+      e.x - e.size,
+      e.y - e.size - 10,
+      (e.health / e.maxHealth) * e.size * 2,
+      5
+    );
+  });
+
+  // Draw bullets
+  bullets.forEach((b) => {
+    ctx.fillStyle = b.fromEnemy ? "yellow" : "white";
+    if (b.poison) ctx.fillStyle = "purple";
+    if (b.exploding) ctx.fillStyle = "orange";
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.size, 0, 2 * Math.PI);
+    ctx.fill();
+  });
+
+  // Draw pickups
+  pickups.forEach((p) => {
+    let color = "white";
+    switch (p.type) {
+      case "damage":
+        color = "red";
+        break;
+      case "speed":
+        color = "orange";
+        break;
+      case "maxHealth":
+        color = "green";
+        break;
+      case "regen":
+        color = "lightgreen";
+        break;
+      case "lifespan":
+        color = "blue";
+        break;
+      case "poison":
+        color = "purple";
+        break;
+      case "explode":
+        color = "yellow";
+        break;
+      case "timeStopUnlock":
+        color = "cyan";
+        break;
+      case "timeStopExtend":
+        color = "lightblue";
+        break;
+    }
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, 2 * Math.PI);
+    ctx.fill();
+  });
+
+  // Draw chests
+  chests.forEach((c) => {
+    ctx.fillStyle = c.opened ? "gray" : "blue";
+    ctx.fillRect(c.x - c.size / 2, c.y - c.size / 2, c.size, c.size);
+  });
+
+  // Draw UI
+  // Health bar
+  ctx.fillStyle = "black";
+  ctx.fillRect(20, 20, 200, 20);
+  ctx.fillStyle = "red";
+  ctx.fillRect(20, 20, (player.health / player.maxHealth) * 200, 20);
+  ctx.strokeStyle = "white";
+  ctx.strokeRect(20, 20, 200, 20);
+
+  // Gold
+  ctx.fillStyle = "yellow";
+  ctx.font = "20px Arial";
+  ctx.fillText("Gold: " + player.gold, 20, 70);
+
+  // Wave
+  ctx.fillStyle = "white";
+  ctx.fillText("Wave: " + wave, width - 120, 40);
+
+  // Time Stop cooldown display
+  if (timeStopUnlocked) {
+    ctx.fillStyle = timeStopActive ? "cyan" : "white";
+    ctx.fillText(
+      "Q Time Stop " +
+        (timeStopActive
+          ? `(${(timeStopTimer / 1000).toFixed(1)}s)`
+          : "(Ready)"),
+      width - 220,
+      70
+    );
+  }
+
+  if (portal) {
+    ctx.fillStyle = "white";
+    ctx.font = "18px Arial";
+    ctx.fillText("Go through portal to next area!", portal.x - 80, portal.y - 80);
+  }
+
+  if (gameOver) {
+    ctx.fillStyle = "rgba(0,0,0,0.7)";
+    ctx.fillRect(0, 0, width, height);
+    ctx.fillStyle = "white";
+    ctx.font = "40px Arial";
+    ctx.fillText("Game Over", width / 2 - 100, height / 2 - 50);
+    ctx.font = "20px Arial";
+    ctx.fillText(
+      "Press Restart to try again",
+      width / 2 - 110,
+      height / 2
+    );
+  }
+}
+
+// == Apply pickups ==
 function applyPickup(type) {
   switch (type) {
     case "damage":
-      player.attackDamage += 3;
+      player.attackDamage *= 0.85; // debuff means reduce damage? (If you want buff, use *=1.15)
       break;
     case "speed":
-      player.speed += 0.3;
+      player.attackSpeed *= 0.85; // faster attack speed means lower delay, so multiply by 0.85 for buff
       break;
     case "maxHealth":
       player.maxHealth += 20;
       player.health += 20;
       break;
     case "regen":
-      player.healthRegen += 0.1;
+      player.healthRegen += 1;
       break;
     case "lifespan":
-      // Could apply to bullet lifespan or something else
+      // Increase bullet lifespan - you'd need to add bullet lifespan property in shooting code
+      // Implement as a global or player property if you want
+      player.bulletLifespan = (player.bulletLifespan || 1000) + 500;
       break;
     case "poison":
-      // Future poison effect
+      player.poisonBullets = true;
       break;
     case "explode":
-      // Future explode effect
+      player.explodeBullets = true;
       break;
     case "timeStopUnlock":
       timeStopUnlocked = true;
@@ -506,5 +718,72 @@ function applyPickup(type) {
   }
 }
 
-// == Render functions, game loop, etc. ==
-// ... (Keep the rest of your existing code unchanged)
+// == Player shooting ==
+function shootPlayer() {
+  if (player.attackCooldown > 0) return;
+
+  const bulletSpeed = 10;
+  const bulletLifespan = player.bulletLifespan || 1000;
+
+  const bullet = {
+    x: player.x + Math.cos(player.angle) * player.size,
+    y: player.y + Math.sin(player.angle) * player.size,
+    vx: Math.cos(player.angle) * bulletSpeed,
+    vy: Math.sin(player.angle) * bulletSpeed,
+    size: 5,
+    lifespan: bulletLifespan,
+    poison: player.poisonBullets || false,
+    exploding: player.explodeBullets || false,
+    fromEnemy: false,
+  };
+
+  bullets.push(bullet);
+
+  player.attackCooldown = player.attackSpeed;
+}
+
+function gameLoop(timestamp = 0) {
+  if (!lastFrameTime) lastFrameTime = timestamp;
+  const delta = timestamp - lastFrameTime;
+  lastFrameTime = timestamp;
+
+  if (!gameOver) {
+    update(delta);
+    if (!timeStopActive) {
+      player.attackCooldown -= delta;
+    }
+  }
+
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+canvas.addEventListener("click", () => {
+  if (!gameOver) shootPlayer();
+});
+
+canvas.addEventListener("mousedown", () => {
+  if (!gameOver) shootPlayer();
+});
+
+// Portal interaction
+canvas.addEventListener("mousemove", (e) => {
+  if (portal && distance(player.x, player.y, portal.x, portal.y) < portal.w) {
+    // Teleport to next area
+    wave = 1;
+    enemiesToSpawn = 5;
+    enemiesKilledThisWave = 0;
+    bossKilledThisWave = false;
+    enemies.length = 0;
+    pickups.length = 0;
+    chests.length = 0;
+    portal = null;
+    player.gold = 0;
+
+    // Change background or biome here if implemented
+    // For now, just clear and reset
+  }
+});
+
+let lastFrameTime = 0;
+requestAnimationFrame(gameLoop);
