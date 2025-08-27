@@ -6,7 +6,6 @@ window.addEventListener('DOMContentLoaded', () => {
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-let width, height;
 function resize() {
   width = window.innerWidth;
   height = window.innerHeight;
