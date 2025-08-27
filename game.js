@@ -1,33 +1,9 @@
-Awesome — glad it's working now! Let's add the **dash mechanic** you described:
-
----
-
-## ✅ Feature: Dash Ability
-
-* **Press Shift** to dash in your movement direction
-* **Cooldown**: 2 seconds
-* **Duration**: very short burst (e.g. 150ms)
-* **Visual cooldown bar** under health bar
-* **Dash passes through enemies**
-
----
-
-## ✅ Just Replace Your `game.js` With This Version
-
-Here’s the updated code, including:
-
-* Dash state
-* Dash movement
-* Dash cooldown tracking
-* Dash bar under health
-
-```javascript
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
 const keys = {};
 document.addEventListener("keydown", (e) => keys[e.key.toLowerCase()] = true);
-document.addEventListener("keyup", (e) => keys[e.key.toLowerCase()] = false);
+document.addEventListener("keyup",   (e) => keys[e.key.toLowerCase()] = false);
 
 const player = {
   x: canvas.width / 2,
@@ -42,188 +18,159 @@ const player = {
   isDashing: false,
   dashTime: 0,
   dashCooldown: 0,
-  dashDuration: 150, // milliseconds
-  dashCooldownMax: 2000 // milliseconds
+  dashDuration: 150,     // ms
+  dashCooldownMax: 2000, // ms
+  damage: 1,
+  shootCooldown: 250
 };
 
-const bullets = [];
-const enemies = [];
-const pickups = [];
+const bullets      = [];
+const enemies      = [];
+const enemyShots   = []; // for ranged enemies
+const pickups      = [];
 let tooltip = null;
-
-function shootBullet() {
-  bullets.push({
-    x: player.x,
-    y: player.y,
-    dx: Math.cos(player.angle) * 5,
-    dy: Math.sin(player.angle) * 5,
-    size: 5
-  });
-}
-
-function spawnEnemy() {
-  const side = Math.floor(Math.random() * 4);
-  let x, y;
-  if (side === 0) { x = 0; y = Math.random() * canvas.height; }
-  if (side === 1) { x = canvas.width; y = Math.random() * canvas.height; }
-  if (side === 2) { x = Math.random() * canvas.width; y = 0; }
-  if (side === 3) { x = Math.random() * canvas.width; y = canvas.height; }
-
-  enemies.push({ x, y, size: 20, speed: 1.2, color: "#f44", hp: 3 });
-}
-
-function spawnPickup(x, y) {
-  const types = [
-    {
-      name: "Health Pack",
-      effect: "Restore 1 health",
-      apply: () => { if (player.health < player.maxHealth) player.health++; },
-      color: "#0f0"
-    },
-    {
-      name: "Speed Boost",
-      effect: "Increase speed",
-      apply: () => { player.speed += 0.5; },
-      color: "#0ff"
-    },
-  ];
-
-  const type = types[Math.floor(Math.random() * types.length)];
-
-  pickups.push({
-    x,
-    y,
-    size: 15,
-    ...type
-  });
-}
 
 let lastShot = 0;
 let enemySpawnTimer = 0;
 
 canvas.addEventListener("mousemove", (e) => {
-  const rect = canvas.getBoundingClientRect();
-  const mouseX = e.clientX - rect.left;
-  const mouseY = e.clientY - rect.top;
-  player.angle = Math.atan2(mouseY - player.y, mouseX - player.x);
+  const r = canvas.getBoundingClientRect();
+  const mx = e.clientX - r.left;
+  const my = e.clientY - r.top;
+  player.angle = Math.atan2(my - player.y, mx - player.x);
 });
 
-function update(dt) {
-  const moveX = (keys["a"] ? -1 : 0) + (keys["d"] ? 1 : 0);
-  const moveY = (keys["w"] ? -1 : 0) + (keys["s"] ? 1 : 0);
-  const length = Math.hypot(moveX, moveY) || 1;
+// Spawn pickups with five types
+function spawnPickup(x, y) {
+  const types = [
+    { name: "Health Pack", effect: "Restore 1 health", apply: () => { if (player.health < player.maxHealth) player.health++; }, color: "#0f0" },
+    { name: "Speed Boost", effect: "Increase movement speed", apply: () => { player.speed += 0.5; }, color: "#0ff" },
+    { name: "Attack Damage Buff", effect: "Bullets deal +1 damage", apply: () => { player.damage += 1; }, color: "#f0f" },
+    { name: "Attack Speed Buff", effect: "Faster shooting", apply: () => { player.shootCooldown = Math.max(50, player.shootCooldown - 30); }, color: "#ffa500" },
+    { name: "Max Health Buff", effect: "+1 Max Health (and heal 1)", apply: () => { player.maxHealth += 1; player.health = Math.min(player.health + 1, player.maxHealth); }, color: "#ff4444" }
+  ];
+  const type = types[Math.floor(Math.random() * types.length)];
+  pickups.push({ x, y, size: 15, ...type });
+}
 
-  // Dash logic
-  if (keys["shift"] && player.dashCooldown <= 0 && !player.isDashing) {
-    player.isDashing = true;
-    player.dashTime = player.dashDuration;
+// Spawn enemies of 4 types
+function spawnEnemy() {
+  const side = Math.floor(Math.random() * 4);
+  let x = [0, canvas.width, Math.random() * canvas.width, Math.random() * canvas.width][side];
+  let y = [Math.random() * canvas.height, Math.random() * canvas.height, 0, canvas.height][side];
+
+  const kind = Math.floor(Math.random() * 4);
+  let enemy;
+
+  switch(kind) {
+    case 0: // Normal
+      enemy = { x, y, size: 20, speed: 1.2, color: "#f44", hp: 3, type: "normal" }; break;
+    case 1: // Fast
+      enemy = { x, y, size: 15, speed: 2.5, color: "#ff0", hp: 1, type: "fast" }; break;
+    case 2: // Tanky
+      enemy = { x, y, size: 25, speed: 0.7, color: "#800", hp: 8, type: "tanky" }; break;
+    case 3: // Ranged
+      enemy = { x, y, size: 18, speed: 1, color: "#0f0", hp: 3, type: "ranged", shootTimer: 0 }; break;
+  }
+
+  enemies.push(enemy);
+}
+
+function shootBullet(fromX, fromY, dx, dy, speed = 5, size = 5, isEnemy = false) {
+  (isEnemy ? enemyShots : bullets).push({ x: fromX, y: fromY, dx, dy, speed, size });
+}
+
+function update(dt) {
+  const mx = (keys["a"] ? -1 : 0) + (keys["d"] ? 1 : 0);
+  const my = (keys["w"] ? -1 : 0) + (keys["s"] ? 1 : 0);
+  const len = Math.hypot(mx, my) || 1;
+
+  // Dash
+  if (keys["shift"] && player.dashCooldown <= 0 && !player.isDashing && (mx || my)) {
+    player.isDashing = true; player.dashTime = player.dashDuration;
     player.dashCooldown = player.dashCooldownMax;
   }
-
   if (player.isDashing) {
-    player.x += (moveX / length) * player.dashSpeed;
-    player.y += (moveY / length) * player.dashSpeed;
+    player.x += (mx / len) * player.dashSpeed;
+    player.y += (my / len) * player.dashSpeed;
     player.dashTime -= dt;
-    if (player.dashTime <= 0) {
-      player.isDashing = false;
-    }
+    if (player.dashTime <= 0) player.isDashing = false;
   } else {
-    player.x += (moveX / length) * player.speed;
-    player.y += (moveY / length) * player.speed;
+    player.x += (mx / len) * player.speed;
+    player.y += (my / len) * player.speed;
   }
-
-  if (player.dashCooldown > 0) {
-    player.dashCooldown -= dt;
-    if (player.dashCooldown < 0) player.dashCooldown = 0;
-  }
+  if (player.dashCooldown > 0) player.dashCooldown = Math.max(0, player.dashCooldown - dt);
 
   // Shooting
-  if (keys[" "]) {
-    if (Date.now() - lastShot > 250) {
-      shootBullet();
-      lastShot = Date.now();
-    }
+  if (keys[" "] && Date.now() - lastShot > player.shootCooldown) {
+    shootBullet(player.x, player.y, Math.cos(player.angle), Math.sin(player.angle));
+    lastShot = Date.now();
   }
 
-  // Bullets
   bullets.forEach((b, i) => {
-    b.x += b.dx;
-    b.y += b.dy;
-    if (b.x < 0 || b.y < 0 || b.x > canvas.width || b.y > canvas.height) {
-      bullets.splice(i, 1);
-    }
+    b.x += b.dx * b.speed; b.y += b.dy * b.speed;
+    if (b.x < 0 || b.y < 0 || b.x > canvas.width || b.y > canvas.height) bullets.splice(i, 1);
   });
 
-  // Enemies
+  // Enemy spawning
   enemySpawnTimer += dt;
-  if (enemySpawnTimer > 2000) {
-    spawnEnemy();
-    enemySpawnTimer = 0;
-  }
+  if (enemySpawnTimer > 2000) { spawnEnemy(); enemySpawnTimer = 0; }
 
-  enemies.forEach((e, i) => {
-    const dx = player.x - e.x;
-    const dy = player.y - e.y;
-    const dist = Math.hypot(dx, dy);
-    e.x += (dx / dist) * e.speed;
-    e.y += (dy / dist) * e.speed;
+  // Enemy behavior
+  enemies.forEach((e, ei) => {
+    const dx = player.x - e.x, dy = player.y - e.y, dist = Math.hypot(dx, dy);
+    e.x += (dx / dist) * e.speed; e.y += (dy / dist) * e.speed;
 
-    bullets.forEach((b, j) => {
+    if (e.type === "ranged") {
+      e.shootTimer = (e.shootTimer || 0) + dt;
+      if (e.shootTimer > 1200) {
+        shootBullet(e.x, e.y, dx / dist, dy / dist, 3, 5, true);
+        e.shootTimer = 0;
+      }
+    }
+
+    bullets.forEach((b, bi) => {
       if (Math.abs(b.x - e.x) < e.size && Math.abs(b.y - e.y) < e.size) {
-        e.hp -= 1;
-        bullets.splice(j, 1);
-        if (e.hp <= 0) {
-          enemies.splice(i, 1);
-          if (Math.random() < 0.5) spawnPickup(e.x, e.y);
-        }
+        e.hp -= player.damage; bullets.splice(bi, 1);
+        if (e.hp <= 0) { enemies.splice(ei, 1); if (Math.random() < 0.5) spawnPickup(e.x, e.y); }
       }
     });
 
-    // Only damage if not dashing
     if (!player.isDashing && Math.abs(player.x - e.x) < player.size && Math.abs(player.y - e.y) < player.size) {
-      player.health -= 0.01 * dt;
-      if (player.health <= 0) {
-        alert("Game Over!");
-        window.location.reload();
-      }
+      player.health -= 0.01 * dt; if (player.health <= 0) { alert("Game Over!"); window.location.reload(); }
     }
   });
 
-  // Enemy-enemy collisions
+  // Enemy-enemy collision
   for (let i = 0; i < enemies.length; i++) {
     for (let j = i + 1; j < enemies.length; j++) {
-      const a = enemies[i];
-      const b = enemies[j];
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      const dist = Math.hypot(dx, dy);
-      const minDist = a.size;
-
-      if (dist < minDist && dist !== 0) {
-        const overlap = (minDist - dist) / 2;
-        const offsetX = (dx / dist) * overlap;
-        const offsetY = (dy / dist) * overlap;
-        a.x -= offsetX;
-        a.y -= offsetY;
-        b.x += offsetX;
-        b.y += offsetY;
+      const a = enemies[i], b = enemies[j];
+      const dx = b.x - a.x, dy = b.y - a.y, dist = Math.hypot(dx, dy);
+      const minD = a.size;
+      if (dist < minD && dist) {
+        const overlap = (minD - dist) / 2;
+        a.x -= (dx / dist) * overlap; a.y -= (dy / dist) * overlap;
+        b.x += (dx / dist) * overlap; b.y += (dy / dist) * overlap;
       }
     }
   }
 
+  // Enemy shots
+  enemyShots.forEach((es, i) => {
+    es.x += es.dx * es.speed; es.y += es.dy * es.speed;
+    if (Math.abs(es.x - player.x) < player.size && Math.abs(es.y - player.y) < player.size) {
+      if (!player.isDashing) player.health -= 1;
+      enemyShots.splice(i, 1);
+    }
+  });
+
   // Pickups
   tooltip = null;
-  pickups.forEach((p, i) => {
-    const dx = player.x - p.x;
-    const dy = player.y - p.y;
-    const dist = Math.hypot(dx, dy);
-
-    if (dist < player.size + p.size) {
+  pickups.forEach((p, pi) => {
+    const dx = player.x - p.x, dy = player.y - p.y;
+    if (Math.hypot(dx, dy) < player.size + p.size) {
       tooltip = `${p.name}: ${p.effect}`;
-      if (keys["e"]) {
-        p.apply();
-        pickups.splice(i, 1);
-      }
+      if (keys["e"]) { p.apply(); pickups.splice(pi, 1); }
     }
   });
 }
@@ -241,37 +188,48 @@ function draw() {
 
   // Bullets
   ctx.fillStyle = "#ff0";
-  bullets.forEach((b) => {
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, b.size, 0, Math.PI * 2);
-    ctx.fill();
-  });
+  bullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, b.size, 0, 2 * Math.PI); ctx.fill(); });
+
+  // Enemy shots
+  ctx.fillStyle = "#f0f";
+  enemyShots.forEach(es => { ctx.beginPath(); ctx.arc(es.x, es.y, es.size, 0, 2 * Math.PI); ctx.fill(); });
 
   // Enemies
-  enemies.forEach((e) => {
+  enemies.forEach(e => {
     ctx.fillStyle = e.color;
-    ctx.beginPath();
-    ctx.arc(e.x, e.y, e.size, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(e.x, e.y, e.size, 0, 2 * Math.PI); ctx.fill();
   });
 
   // Pickups
   pickups.forEach(p => {
     ctx.fillStyle = p.color;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, 2 * Math.PI); ctx.fill();
   });
 
   // Tooltip
   if (tooltip) {
-    ctx.fillStyle = "#fff";
-    ctx.font = "16px Arial";
+    ctx.fillStyle = "#fff"; ctx.font = "16px Arial";
     ctx.fillText(tooltip + " (Press E)", 10, canvas.height - 20);
   }
 
   // Health bar
-  ctx.fillStyle = "red";
-  ctx.fillRect(10, 10, 100, 10);
-  ctx.fillStyle = "lime";
-```
+  ctx.fillStyle = "red";  ctx.fillRect(10, 10, 100, 10);
+  ctx.fillStyle = "lime"; ctx.fillRect(10, 10, (player.health / player.maxHealth) * 100, 10);
+  ctx.strokeStyle = "#000"; ctx.strokeRect(10, 10, 100, 10);
+
+  // Dash cooldown bar
+  ctx.fillStyle = "#555"; ctx.fillRect(10, 25, 100, 5);
+  ctx.fillStyle = "#0af";
+  const prog = 1 - (player.dashCooldown / player.dashCooldownMax);
+  ctx.fillRect(10, 25, prog * 100, 5);
+  ctx.strokeStyle = "#000"; ctx.strokeRect(10, 25, 100, 5);
+}
+
+let lastTime = performance.now();
+function gameLoop(ts) {
+  const dt = ts - lastTime; lastTime = ts;
+  update(dt); draw();
+  requestAnimationFrame(gameLoop);
+}
+
+requestAnimationFrame(gameLoop);
