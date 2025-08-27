@@ -1,4 +1,18 @@
 
+/* Remove default margin/padding */
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden; /* prevent horizontal scrolling */
+}
+
+/* Optional: Make canvas fit screen width */
+canvas {
+  display: block;  /* removes inline whitespace */
+  max-width: 100vw;  /* don't overflow viewport width */
+  max-height: 100vh; /* don't overflow viewport height */
+}
+
 body {
   margin: 0;
   background-color: #111;
