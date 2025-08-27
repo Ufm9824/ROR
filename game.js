@@ -17,7 +17,7 @@ const player = {
   x: width / 2,
   y: height / 2,
   size: 30,
-  speed: 3,
+  speed: 3.5, // equal to fast enemy speed
   health: 100,
   maxHealth: 100,
   attackDamage: 10,
@@ -30,7 +30,7 @@ const player = {
   dashTime: 0,
   angle: 0,
   gold: 0,
-  healthRegen: 0, // no regen at start per request
+  healthRegen: 0, // no regen at start
 };
 
 let keys = {};
@@ -91,12 +91,8 @@ function distance(x1, y1, x2, y2) {
 
 // Checks if position is inside "walls" or map bounds
 function isInsideWall(x, y) {
-  // For biomes, walls are edges or special features
-  // We'll assume 50 px margin from edges is wall
   if (x < 50 || x > width - 50 || y < 50 || y > height - 50) return true;
-
   // Add biome specific wall checks here if needed
-
   return false;
 }
 
@@ -117,10 +113,8 @@ function updatePlayer(delta) {
   }
 
   if (player.isDashing) {
-    player.x +=
-      Math.cos(player.angle) * player.dashSpeed;
-    player.y +=
-      Math.sin(player.angle) * player.dashSpeed;
+    player.x += Math.cos(player.angle) * player.dashSpeed;
+    player.y += Math.sin(player.angle) * player.dashSpeed;
     player.dashTime -= delta;
     if (player.dashTime <= 0) {
       player.isDashing = false;
@@ -143,11 +137,15 @@ function updatePlayer(delta) {
     player.dashCooldown -= delta;
   }
 
-  // Aim toward mouse cursor
+  // Always aim toward mouse cursor
   player.angle = Math.atan2(mouseY - player.y, mouseX - player.x);
 
   // Health regen (if any)
-  if (player.health < player.maxHealth && player.healthRegen > 0 && !timeStopActive) {
+  if (
+    player.health < player.maxHealth &&
+    player.healthRegen > 0 &&
+    !timeStopActive
+  ) {
     player.health += player.healthRegen * (delta / 1000);
     if (player.health > player.maxHealth) player.health = player.maxHealth;
   }
@@ -167,20 +165,14 @@ function updateBullets(delta) {
 
     // Check collisions with enemies
     enemies.forEach((e, ei) => {
-      if (
-        distance(b.x, b.y, e.x, e.y) <
-        e.size + b.size
-      ) {
+      if (distance(b.x, b.y, e.x, e.y) < e.size + b.size) {
         e.health -= player.attackDamage;
         stats.damage += player.attackDamage;
         if (b.exploding) {
           e.poisoned = false; // No poison if exploding
           // Damage nearby enemies too
           enemies.forEach((e2) => {
-            if (
-              e2 !== e &&
-              distance(b.x, b.y, e2.x, e2.y) < 50
-            ) {
+            if (e2 !== e && distance(b.x, b.y, e2.x, e2.y) < 50) {
               e2.health -= player.attackDamage / 2;
             }
           });
@@ -193,8 +185,9 @@ function updateBullets(delta) {
         if (e.health <= 0) {
           enemiesKilledThisWave++;
           stats.kills++;
-          stats.coinsEarned += 10 + Math.floor(Math.random() * 6);
-          player.gold += 10 + Math.floor(Math.random() * 6);
+          const goldDrop = Math.floor(Math.random() * 16); // 0-15 gold
+          stats.coinsEarned += goldDrop;
+          player.gold += goldDrop;
 
           if (e.type === "boss") {
             bossKilledThisWave = true;
@@ -204,12 +197,7 @@ function updateBullets(delta) {
       }
     });
 
-    if (
-      b.x < 0 ||
-      b.x > width ||
-      b.y < 0 ||
-      b.y > height
-    ) {
+    if (b.x < 0 || b.x > width || b.y < 0 || b.y > height) {
       bullets.splice(i, 1);
     }
   });
@@ -225,15 +213,50 @@ function updateEnemies(delta) {
       if (e.poisonTimer <= 0) e.poisoned = false;
     }
 
-    const angle = Math.atan2(player.y - e.y, player.x - e.x);
-    e.x += Math.cos(angle) * e.speed;
-    e.y += Math.sin(angle) * e.speed;
+    if (e.type === "ranged") {
+      if (!e.state) e.state = "move"; // "move" or "shoot"
+      if (!e.stateTime) e.stateTime = 1000; // 1 sec move/shoot duration
+      e.stateTime -= delta;
+      if (e.state === "move") {
+        // Move toward player
+        const angle = Math.atan2(player.y - e.y, player.x - e.x);
+        e.x += Math.cos(angle) * e.speed;
+        e.y += Math.sin(angle) * e.speed;
 
-    // Keep enemies inside bounds (avoid walls)
-    if (isInsideWall(e.x, e.y)) {
-      // Push enemy away from wall
-      e.x -= Math.cos(angle) * e.speed * 2;
-      e.y -= Math.sin(angle) * e.speed * 2;
+        // Avoid walls
+        if (isInsideWall(e.x, e.y)) {
+          e.x -= Math.cos(angle) * e.speed * 2;
+          e.y -= Math.sin(angle) * e.speed * 2;
+        }
+
+        if (e.stateTime <= 0) {
+          e.state = "shoot";
+          e.stateTime = 500; // short shoot delay
+          e.shootCooldown = 0;
+        }
+      } else if (e.state === "shoot") {
+        // Shoot once when cooldown is zero
+        if (e.shootCooldown <= 0) {
+          shootEnemyBullet(e);
+          e.shootCooldown = e.attackCooldown;
+        } else {
+          e.shootCooldown -= delta;
+        }
+        if (e.stateTime <= 0) {
+          e.state = "move";
+          e.stateTime = 1000;
+        }
+      }
+    } else {
+      // Normal enemy behavior: move toward player
+      const angle = Math.atan2(player.y - e.y, player.x - e.x);
+      e.x += Math.cos(angle) * e.speed;
+      e.y += Math.sin(angle) * e.speed;
+
+      if (isInsideWall(e.x, e.y)) {
+        e.x -= Math.cos(angle) * e.speed * 2;
+        e.y -= Math.sin(angle) * e.speed * 2;
+      }
     }
 
     // Attack player if close
@@ -251,6 +274,22 @@ function updateEnemies(delta) {
   });
 }
 
+function shootEnemyBullet(enemy) {
+  const angle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
+  const speed = 6;
+  bullets.push({
+    x: enemy.x + Math.cos(angle) * enemy.size,
+    y: enemy.y + Math.sin(angle) * enemy.size,
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed,
+    size: 5,
+    lifespan: 3000,
+    poison: false,
+    exploding: false,
+    fromEnemy: true,
+  });
+}
+
 // == Pickup update ==
 function updatePickups(delta) {
   pickups.forEach((p, i) => {
@@ -263,7 +302,6 @@ function updatePickups(delta) {
 
 // == Chest update ==
 function updateChests(delta) {
-  // Chests remain static but can be opened by pressing 'e' nearby
   chests.forEach((c) => {
     if (distance(player.x, player.y, c.x, c.y) < 50 && keys["e"]) {
       if (!c.opened && player.gold >= chestCost) {
@@ -298,7 +336,6 @@ function spawnEnemy(type = "normal") {
     poisonTimer: 0,
   };
 
-  // Buff tank enemy
   if (type === "tank") {
     enemy.health = 100;
     enemy.maxHealth = 100;
@@ -307,7 +344,6 @@ function spawnEnemy(type = "normal") {
     enemy.speed = 0.8;
   }
 
-  // Fast enemy
   if (type === "fast") {
     enemy.speed = 3.5;
     enemy.health = 15;
@@ -316,7 +352,6 @@ function spawnEnemy(type = "normal") {
     enemy.attackCooldown = 700;
   }
 
-  // Ranged enemy (doesn't move, shoots bullets)
   if (type === "ranged") {
     enemy.speed = 1;
     enemy.health = 20;
@@ -324,9 +359,10 @@ function spawnEnemy(type = "normal") {
     enemy.damage = 4;
     enemy.attackCooldown = 1500;
     enemy.shootCooldown = 0;
+    enemy.state = "move";
+    enemy.stateTime = 1000;
   }
 
-  // Boss enemy (strong)
   if (type === "boss") {
     enemy.size = 50;
     enemy.speed = 1;
@@ -412,14 +448,63 @@ function update(delta) {
   updatePickups(delta);
   updateChests(delta);
 
-  // Spawn enemies over time
   lastSpawnTime += delta;
-  if (lastSpawnTime > 1500 && enemies.length < enemiesToSpawn) {
-    // Spawn mix of enemy types by wave
+  if (
+    lastSpawnTime > 1500 &&
+    enemies.length < enemiesToSpawn
+  ) {
     const enemyTypeRoll = Math.random();
-    if (wave % 10 === 0 && enemies.filter(e => e.type === "boss").length === 0 && !bossKilledThisWave) {
+    if (
+      wave % 10 === 0 &&
+      enemies.filter((e) => e.type === "boss").length === 0 &&
+      !bossKilledThisWave
+    ) {
       spawnEnemy("boss");
     } else if (enemyTypeRoll < 0.3) spawnEnemy("fast");
     else if (enemyTypeRoll < 0.6) spawnEnemy("tank");
     else spawnEnemy("ranged");
-    lastSpawnTime = 0
+    lastSpawnTime = 0;
+  }
+
+  // Spawn portal only after boss killed this wave
+  if (bossKilledThisWave && !portal) {
+    spawnPortal(width / 2, height / 2);
+  }
+}
+
+// == Pickup effect ==
+function applyPickup(type) {
+  switch (type) {
+    case "damage":
+      player.attackDamage += 3;
+      break;
+    case "speed":
+      player.speed += 0.3;
+      break;
+    case "maxHealth":
+      player.maxHealth += 20;
+      player.health += 20;
+      break;
+    case "regen":
+      player.healthRegen += 0.1;
+      break;
+    case "lifespan":
+      // Could apply to bullet lifespan or something else
+      break;
+    case "poison":
+      // Future poison effect
+      break;
+    case "explode":
+      // Future explode effect
+      break;
+    case "timeStopUnlock":
+      timeStopUnlocked = true;
+      break;
+    case "timeStopExtend":
+      timeStopDurationExtension += 5000;
+      break;
+  }
+}
+
+// == Render functions, game loop, etc. ==
+// ... (Keep the rest of your existing code unchanged)
