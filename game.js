@@ -13,6 +13,16 @@ const keys = {};
 document.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
 document.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
 
+// === Mouse Handling ===
+let mouseX = 0;
+let mouseY = 0;
+
+canvas.addEventListener('mousemove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  mouseX = e.clientX - rect.left;
+  mouseY = e.clientY - rect.top;
+});
+
 // === Player ===
 const player = {
   x: 300, y: 300, size: 20,
@@ -22,7 +32,7 @@ const player = {
   isDashing: false,
   angle: 0,
   health: 5, maxHealth: 5,
-  healthRegen: 0.01,
+  healthRegen: 0,
   damage: 1, shootCooldown: 300, lastShot: 0,
   bulletLife: 40, gold: 0,
   poison: false, exploding: false
@@ -93,6 +103,9 @@ function shootBullet() {
 function update(delta) {
   if (gameOver) return;
 
+  // Calculate angle towards mouse cursor
+  player.angle = Math.atan2(mouseY - player.y, mouseX - player.x);
+  
   // Dash Logic
   if (player.dashCooldown > 0) player.dashCooldown -= delta;
   if (keys["shift"] && player.dashCooldown <= 0) {
@@ -210,14 +223,14 @@ function update(delta) {
       c.opened = true;
       chestCost += 10;
 
-      const roll = Math.floor(Math.random() * 75);
-      if (roll < 20) spawnPickup(c.x, c.y, "damage");
-      else if (roll < 30) spawnPickup(c.x, c.y, "speed");
-      else if (roll < 40) spawnPickup(c.x, c.y, "maxHealth");
-      else if (roll < 50) spawnPickup(c.x, c.y, "regen");
-      else if (roll < 60) spawnPickup(c.x, c.y, "lifespan");
-      else if (roll === 73) spawnPickup(c.x, c.y, "poison");
-      else if (roll === 74) spawnPickup(c.x, c.y, "explode");
+      const roll = Math.floor(Math.random() * 27);
+      if (roll < 5) spawnPickup(c.x, c.y, "damage");
+      else if (roll < 10) spawnPickup(c.x, c.y, "speed");
+      else if (roll < 15) spawnPickup(c.x, c.y, "maxHealth");
+      else if (roll < 20) spawnPickup(c.x, c.y, "regen");
+      else if (roll < 25) spawnPickup(c.x, c.y, "lifespan");
+      else if (roll === 26) spawnPickup(c.x, c.y, "poison");
+      else if (roll === 27) spawnPickup(c.x, c.y, "explode");
     }
   });
 
