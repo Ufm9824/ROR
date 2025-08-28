@@ -16,8 +16,8 @@ window.addEventListener("resize", resize);
 const player = {
   x: width / 2,
   y: height / 2,
-  size: 20, // smaller because arrow shape
-  speed: 3.5, // equal to fast enemy speed
+  size: 20,
+  speed: 3.5,
   health: 100,
   maxHealth: 100,
   attackDamage: 10,
@@ -30,7 +30,7 @@ const player = {
   dashTime: 0,
   angle: 0,
   gold: 0,
-  healthRegen: 0, // no regen at start
+  healthRegen: 0,
 };
 
 let keys = {};
@@ -72,6 +72,9 @@ let timeStopCooldownMax = 60000; // 60 sec cooldown
 // Wave delay variables
 let waitingForNextWave = false;
 let waveWaitTimer = 0;
+
+// === Chest upgrades collected, for display ===
+const collectedUpgrades = {};
 
 // == Input handling ==
 window.addEventListener("keydown", (e) => {
@@ -168,38 +171,58 @@ function updateBullets(delta) {
       return;
     }
 
-    enemies.forEach((e, ei) => {
-      if (distance(b.x, b.y, e.x, e.y) < e.size + b.size) {
-        e.health -= player.attackDamage;
-        stats.damage += player.attackDamage;
+    // Enemy bullets do not hit enemies, player bullets do not hit player
+    if (!b.fromEnemy) {
+      enemies.forEach((e, ei) => {
+        if (distance(b.x, b.y, e.x, e.y) < e.size + b.size) {
+          e.health -= player.attackDamage;
+          stats.damage += player.attackDamage;
 
-        if (b.exploding) {
-          e.poisoned = false;
-          enemies.forEach((e2) => {
-            if (e2 !== e && distance(b.x, b.y, e2.x, e2.y) < 50) {
-              e2.health -= player.attackDamage / 2;
-            }
-          });
-        } else if (b.poison) {
-          e.poisoned = true;
-          e.poisonTimer = 3000;
-        }
-
-        bullets.splice(i, 1);
-        if (e.health <= 0) {
-          enemiesKilledThisWave++;
-          stats.kills++;
-          const goldDrop = Math.floor(Math.random() * 16);
-          stats.coinsEarned += goldDrop;
-          player.gold += goldDrop;
-
-          if (e.type === "boss") {
-            bossKilledThisWave = true;
+          if (b.exploding) {
+            e.poisoned = false;
+            enemies.forEach((e2) => {
+              if (e2 !== e && distance(b.x, b.y, e2.x, e2.y) < 50) {
+                e2.health -= player.attackDamage / 2;
+              }
+            });
+          } else if (b.poison) {
+            e.poisoned = true;
+            e.poisonTimer = 3000;
           }
-          enemies.splice(ei, 1);
+
+          bullets.splice(i, 1);
+
+          if (e.health <= 0) {
+            enemiesKilledThisWave++;
+            stats.kills++;
+            // 50% chance drop 0-5 gold
+            if (Math.random() < 0.5) {
+              const goldDrop = Math.floor(Math.random() * 6);
+              if (goldDrop > 0) {
+                stats.coinsEarned += goldDrop;
+                player.gold += goldDrop;
+                spawnPickup(e.x, e.y, "gold", goldDrop);
+              }
+            }
+
+            if (e.type === "boss") {
+              bossKilledThisWave = true;
+            }
+            enemies.splice(ei, 1);
+          }
+        }
+      });
+    } else {
+      // Enemy bullet hits player
+      if (distance(b.x, b.y, player.x, player.y) < player.size + b.size) {
+        player.health -= 10; // fixed damage for enemy bullets
+        bullets.splice(i, 1);
+        if (player.health <= 0) {
+          gameOver = true;
+          showEndScreen = true;
         }
       }
-    });
+    }
 
     if (b.x < 0 || b.x > width || b.y < 0 || b.y > height) {
       bullets.splice(i, 1);
@@ -257,25 +280,28 @@ function updateEnemies(delta) {
         e.x -= Math.cos(angle) * e.speed * 2;
         e.y -= Math.sin(angle) * e.speed * 2;
       }
-    }
 
-    if (distance(e.x, e.y, player.x, player.y) < e.size + player.size) {
-      const now = Date.now();
-      if (!e.lastAttack || now - e.lastAttack > e.attackCooldown) {
+      // Melee attack if close
+      if (
+        distance(e.x, e.y, player.x, player.y) < e.size + player.size + 10 &&
+        e.attackCooldown <= 0
+      ) {
         player.health -= e.damage;
-        e.lastAttack = now;
+        e.attackCooldown = e.attackCooldownMax || 1000;
+
         if (player.health <= 0) {
           gameOver = true;
           showEndScreen = true;
         }
       }
+      if (e.attackCooldown > 0) e.attackCooldown -= delta;
     }
   });
 }
 
 function shootEnemyBullet(enemy) {
   const angle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
-  const speed = 6;
+  const speed = 5;
   bullets.push({
     x: enemy.x + Math.cos(angle) * enemy.size,
     y: enemy.y + Math.sin(angle) * enemy.size,
@@ -287,9 +313,9 @@ function shootEnemyBullet(enemy) {
   });
 }
 
-// == Player shooting ==
+// == Player shooting on Spacebar ==
 function playerShoot() {
-  if (player.attackCooldown <= 0 && !timeStopActive) {
+  if (player.attackCooldown <= 0 && !timeStopActive && keys[" "]) {
     const angle = player.angle;
     const speed = 10;
     bullets.push({
@@ -298,9 +324,10 @@ function playerShoot() {
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed,
       size: 5,
-      lifespan: 3000,
+      lifespan: 3000 + (player.bulletRangeBonus || 0),
       exploding: player.hasExplosiveBullets || false,
       poison: player.hasPoisonBullets || false,
+      fromEnemy: false,
     });
     player.attackCooldown = player.attackSpeed;
   }
@@ -313,9 +340,7 @@ function spawnPickup(x, y, type, value) {
 
 function updatePickups(delta) {
   pickups.forEach((p, i) => {
-    if (
-      distance(p.x, p.y, player.x, player.y) < p.size + player.size
-    ) {
+    if (distance(p.x, p.y, player.x, player.y) < p.size + player.size) {
       if (p.type === "gold") {
         player.gold += p.value;
         stats.coinsEarned += p.value;
@@ -337,11 +362,20 @@ function updateChests(delta) {
     if (
       !chest.opened &&
       distance(chest.x, chest.y, player.x, player.y) < chest.size + player.size &&
-      keys["e"] && player.gold >= chestCost
+      keys["e"] &&
+      player.gold >= chestCost
     ) {
       player.gold -= chestCost;
       chest.opened = true;
-      applyRandomUpgrade();
+
+      // Apply and record upgrade
+      const upgrade = applyRandomUpgrade();
+
+      if (collectedUpgrades[upgrade]) {
+        collectedUpgrades[upgrade]++;
+      } else {
+        collectedUpgrades[upgrade] = 1;
+      }
     }
   });
 }
@@ -361,13 +395,18 @@ const upgrades = [
 let focusUpgrades = 0;
 
 function applyRandomUpgrade() {
-  let available = ["attackSpeed", "attackDamage", "maxHealth", "healthRegen", "bulletRange"];
+  let available = [
+    "attackSpeed",
+    "attackDamage",
+    "maxHealth",
+    "healthRegen",
+    "bulletRange",
+  ];
   if (timeStopUnlocked) {
     available.push("focus");
   }
   let rare = ["explosiveBullets", "poisonBullets", "timeStop"];
 
-  // Chance for rare upgrades: 10%
   let upgrade;
   if (Math.random() < 0.1) {
     upgrade = rare[Math.floor(Math.random() * rare.length)];
@@ -390,9 +429,6 @@ function applyRandomUpgrade() {
       player.healthRegen += 0.5;
       break;
     case "bulletRange":
-      // This can be implemented by lifespan of bullets, default 3000
-      // We will add 500ms per upgrade
-      // We'll track bullet lifespan elsewhere
       player.bulletRangeBonus = (player.bulletRangeBonus || 0) + 500;
       break;
     case "explosiveBullets":
@@ -406,10 +442,12 @@ function applyRandomUpgrade() {
       break;
     case "focus":
       focusUpgrades++;
-      timeStopDurationExtension += 5000; // +5 sec per focus upgrade
-      timeStopCooldownMax = Math.max(10000, timeStopCooldownMax - 1000); // cooldown lowered by 1 sec per focus upgrade (min 10s)
+      timeStopDurationExtension += 5000;
+      timeStopCooldownMax = Math.max(10000, timeStopCooldownMax - 1000);
       break;
   }
+
+  return upgrade;
 }
 
 // == Wave spawning ==
@@ -428,7 +466,6 @@ function spawnEnemy() {
   const x = Math.random() < 0.5 ? 50 : width - 50;
   const y = 50 + Math.random() * (height - 100);
 
-  // 4 enemy types: ranged, tank, fast, regular
   const types = ["regular", "ranged", "tank", "fast"];
   const type = types[Math.floor(Math.random() * types.length)];
 
@@ -441,6 +478,7 @@ function spawnEnemy() {
     maxHealth: 30,
     damage: 10,
     attackCooldown: 1000,
+    attackCooldownMax: 1000,
     type,
     lastAttack: 0,
     poisoned: false,
@@ -453,6 +491,7 @@ function spawnEnemy() {
       enemy.health = 25;
       enemy.damage = 5;
       enemy.attackCooldown = 1200;
+      enemy.attackCooldownMax = 1200;
       break;
     case "tank":
       enemy.speed = 1;
@@ -512,11 +551,24 @@ function update(delta) {
 
   if (waitingForNextWave) {
     waveWaitTimer -= delta;
+
+    // Player can move and do things during pause, but enemies and bullets stop moving
+    updatePlayer(delta);
+
     if (waveWaitTimer <= 0) {
       waitingForNextWave = false;
       wave++;
       spawnWave();
     }
+
+    // Remove opened chests during wave delay
+    for (let i = chests.length - 1; i >= 0; i--) {
+      if (chests[i].opened) chests.splice(i, 1);
+    }
+
+    // Still update pickups so player can pick gold dropped
+    updatePickups(delta);
+
     return;
   }
 
@@ -538,160 +590,220 @@ function update(delta) {
     waveWaitTimer = 3000; // 3 seconds wait
   }
 
-  // If boss killed and portal not spawned, spawn portal
   if (bossKilledThisWave && !portal) {
     spawnPortal();
   }
 }
+
+// == Drawing functions ==
 
 function drawPlayer() {
   ctx.save();
   ctx.translate(player.x, player.y);
   ctx.rotate(player.angle);
 
-  // Arrow shape (triangle)
   ctx.fillStyle = "white";
   ctx.beginPath();
-  ctx.moveTo(20, 0);       // Tip of the arrow (pointing forward)
-  ctx.lineTo(-15, 10);     // Bottom left corner
-  ctx.lineTo(-10, 0);      // Notch (middle left)
-  ctx.lineTo(-15, -10);    // Top left corner
+  ctx.moveTo(20, 0);
+  ctx.lineTo(-15, 10);
+  ctx.lineTo(-10, 0);
+  ctx.lineTo(-15, -10);
   ctx.closePath();
   ctx.fill();
 
   ctx.restore();
-
-  // Health bar above player
-  const barWidth = 40;
-  const barHeight = 6;
-  const healthRatio = player.health / player.maxHealth;
-  ctx.fillStyle = "red";
-  ctx.fillRect(player.x - barWidth / 2, player.y - 40, barWidth, barHeight);
-  ctx.fillStyle = "limegreen";
-  ctx.fillRect(player.x - barWidth / 2, player.y - 40, barWidth * healthRatio, barHeight);
-  ctx.strokeStyle = "black";
-  ctx.strokeRect(player.x - barWidth / 2, player.y - 40, barWidth, barHeight);
 }
 
 function drawEnemies() {
   enemies.forEach((e) => {
-    ctx.save();
-    ctx.translate(e.x, e.y);
     ctx.fillStyle = e.poisoned ? "purple" : "red";
     ctx.beginPath();
-    ctx.arc(0, 0, e.size, 0, Math.PI * 2);
+    ctx.arc(e.x, e.y, e.size, 0, Math.PI * 2);
     ctx.fill();
 
-    // Enemy health bar
-    const barWidth = e.size * 2;
-    const barHeight = 4;
-    const healthRatio = e.health / e.maxHealth;
+    // Health bar
     ctx.fillStyle = "black";
-    ctx.fillRect(-e.size, -e.size - 10, barWidth, barHeight);
-    ctx.fillStyle = "limegreen";
-    ctx.fillRect(-e.size, -e.size - 10, barWidth * healthRatio, barHeight);
-    ctx.restore();
+    ctx.fillRect(e.x - e.size, e.y - e.size - 8, e.size * 2, 5);
+    ctx.fillStyle = "lime";
+    ctx.fillRect(
+      e.x - e.size,
+      e.y - e.size - 8,
+      (e.health / e.maxHealth) * e.size * 2,
+      5
+    );
   });
 }
 
 function drawBullets() {
   bullets.forEach((b) => {
-    ctx.save();
-    ctx.translate(b.x, b.y);
-    ctx.fillStyle = b.fromEnemy ? "orange" : "white";
+    ctx.fillStyle = b.poison ? "purple" : b.fromEnemy ? "orange" : "white";
     ctx.beginPath();
-    ctx.arc(0, 0, b.size, 0, Math.PI * 2);
+    ctx.arc(b.x, b.y, b.size, 0, Math.PI * 2);
     ctx.fill();
-    ctx.restore();
   });
 }
 
 function drawPickups() {
   pickups.forEach((p) => {
-    ctx.save();
-    ctx.translate(p.x, p.y);
-    ctx.fillStyle = "gold";
+    ctx.fillStyle = "yellow";
     ctx.beginPath();
-    ctx.arc(0, 0, p.size, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
     ctx.fill();
-    ctx.restore();
   });
 }
 
 function drawChests() {
   chests.forEach((chest) => {
-    ctx.save();
-    ctx.translate(chest.x, chest.y);
-    ctx.fillStyle = chest.opened ? "gray" : "yellow";
-    ctx.fillRect(-chest.size / 2, -chest.size / 2, chest.size, chest.size);
-    ctx.restore();
+    ctx.fillStyle = chest.opened ? "gray" : "gold";
+    ctx.fillRect(chest.x - chest.size, chest.y - chest.size, chest.size * 2, chest.size * 2);
+    ctx.strokeStyle = "black";
+    ctx.strokeRect(chest.x - chest.size, chest.y - chest.size, chest.size * 2, chest.size * 2);
+
+    if (!chest.opened) {
+      ctx.fillStyle = "black";
+      ctx.font = "16px Arial";
+      ctx.fillText("E", chest.x - 6, chest.y + 6);
+    }
   });
 }
 
-function drawHUD() {
-  // Gold count
-  ctx.fillStyle = "gold";
-  ctx.font = "20px Arial";
-  ctx.fillText("Gold: " + player.gold, 20, 30);
-
-  // Dash cooldown bar
-  const dashBarWidth = 150;
-  const dashBarHeight = 15;
+function drawUI() {
+  // Health bar top-left
+  const barWidth = 200;
+  const barHeight = 20;
+  const padding = 10;
   ctx.fillStyle = "black";
-  ctx.fillRect(20, 40, dashBarWidth, dashBarHeight);
-  const dashRatio = Math.max(0, player.dashCooldown) / player.dashCooldownMax;
-  ctx.fillStyle = "cyan";
-  ctx.fillRect(20, 40, dashBarWidth * (1 - dashRatio), dashBarHeight);
+  ctx.fillRect(padding, padding, barWidth, barHeight);
+  ctx.fillStyle = "red";
+  ctx.fillRect(padding, padding, (player.health / player.maxHealth) * barWidth, barHeight);
   ctx.strokeStyle = "white";
-  ctx.strokeRect(20, 40, dashBarWidth, dashBarHeight);
+  ctx.strokeRect(padding, padding, barWidth, barHeight);
   ctx.fillStyle = "white";
-  ctx.fillText("Dash Cooldown", 20, 38);
+  ctx.font = "16px Arial";
+  ctx.fillText(`Health: ${Math.floor(player.health)}/${player.maxHealth}`, padding + 5, padding + 16);
 
-  // TimeStop cooldown bar (if unlocked)
-  if (timeStopUnlocked) {
-    const tsBarWidth = 150;
-    const tsBarHeight = 15;
-    ctx.fillStyle = "black";
-    ctx.fillRect(20, 65, tsBarWidth, tsBarHeight);
-    const tsRatio = Math.max(0, timeStopCooldown) / timeStopCooldownMax;
-    ctx.fillStyle = timeStopActive ? "yellow" : "purple";
-    ctx.fillRect(20, 65, tsBarWidth * (1 - tsRatio), tsBarHeight);
-    ctx.strokeStyle = "white";
-    ctx.strokeRect(20, 65, tsBarWidth, tsBarHeight);
+  // Dash cooldown bar below health
+  const dashBarY = padding + barHeight + 10;
+  ctx.fillStyle = "black";
+  ctx.fillRect(padding, dashBarY, barWidth, barHeight);
+  ctx.fillStyle = "blue";
+  const dashPercent = Math.min(player.dashCooldown / player.dashCooldownMax, 1);
+  ctx.fillRect(padding, dashBarY, barWidth * (1 - dashPercent), barHeight);
+  ctx.strokeStyle = "white";
+  ctx.strokeRect(padding, dashBarY, barWidth, barHeight);
+  ctx.fillStyle = "white";
+  ctx.fillText("Dash Cooldown", padding + 5, dashBarY + 16);
+
+  // TimeStop cooldown bar below dash cooldown
+  const timeStopBarY = dashBarY + barHeight + 10;
+  ctx.fillStyle = "black";
+  ctx.fillRect(padding, timeStopBarY, barWidth, barHeight);
+  ctx.fillStyle = "cyan";
+  const timeStopPercent = timeStopActive
+    ? 1 - timeStopTimer / (timeStopDurationBase + timeStopDurationExtension)
+    : Math.min(timeStopCooldown / timeStopCooldownMax, 1);
+  ctx.fillRect(padding, timeStopBarY, barWidth * (1 - timeStopPercent), barHeight);
+  ctx.strokeStyle = "white";
+  ctx.strokeRect(padding, timeStopBarY, barWidth, barHeight);
+  ctx.fillStyle = "white";
+  ctx.fillText("TimeStop", padding + 5, timeStopBarY + 16);
+
+  // Gold count below bars
+  ctx.fillStyle = "yellow";
+  ctx.font = "18px Arial";
+  ctx.fillText(`Gold: ${player.gold}`, padding, timeStopBarY + barHeight + 30);
+
+  // Draw collected upgrades at top center
+  const iconSize = 32;
+  const spacing = 10;
+  let startX = width / 2 - ((iconSize + spacing) * Object.keys(collectedUpgrades).length) / 2;
+  const startY = 10;
+
+  Object.entries(collectedUpgrades).forEach(([key, count], index) => {
+    const x = startX + index * (iconSize + spacing);
+    drawUpgradeIcon(x, startY, iconSize, key, count);
+  });
+}
+
+// Draw upgrade icons and tooltip
+function drawUpgradeIcon(x, y, size, key, count) {
+  ctx.fillStyle = "white";
+  ctx.fillRect(x, y, size, size);
+  ctx.fillStyle = "black";
+  ctx.font = "20px Arial";
+  ctx.fillText(key[0].toUpperCase(), x + size / 4, y + (size * 3) / 4);
+
+  // Count in corner
+  ctx.fillStyle = "yellow";
+  ctx.font = "16px Arial";
+  ctx.fillText(count, x + size - 12, y + size - 6);
+
+  // Tooltip if mouse hovers over icon
+  if (
+    mouseX >= x &&
+    mouseX <= x + size &&
+    mouseY >= y &&
+    mouseY <= y + size
+  ) {
+    ctx.fillStyle = "rgba(0,0,0,0.7)";
+    ctx.fillRect(mouseX + 10, mouseY + 10, 140, 30);
     ctx.fillStyle = "white";
-    ctx.fillText("Time Stop Cooldown", 20, 63);
+    ctx.font = "14px Arial";
+    ctx.fillText(upgradeTooltipText(key), mouseX + 15, mouseY + 30);
+  }
+}
+
+function upgradeTooltipText(key) {
+  switch (key) {
+    case "attackSpeed":
+      return "Attack Speed: Faster shooting";
+    case "attackDamage":
+      return "Attack Damage: More damage";
+    case "maxHealth":
+      return "Max Health: More health";
+    case "healthRegen":
+      return "Health Regen: Gradual healing";
+    case "bulletRange":
+      return "Bullet Range: Bullets last longer";
+    case "explosiveBullets":
+      return "Explosive Bullets: Splash damage";
+    case "poisonBullets":
+      return "Poison Bullets: Damage over time";
+    case "timeStop":
+      return "Time Stop: Stop time for 10s";
+    case "focus":
+      return "Focus: +5s Time Stop, -1s cooldown";
+    default:
+      return "Unknown upgrade";
   }
 }
 
 // == Main loop ==
 function gameLoop(timestamp = 0) {
+  if (!lastTime) lastTime = timestamp;
   const delta = timestamp - lastTime;
   lastTime = timestamp;
 
   ctx.clearRect(0, 0, width, height);
 
-  if (!gameOver) {
-    update(delta);
+  update(delta);
 
-    drawPlayer();
-    drawEnemies();
-    drawBullets();
-    drawPickups();
-    drawChests();
-    if (portal) drawPortal(portal.x, portal.y, portal.w, portal.h);
-    drawHUD();
+  drawChests();
+  drawPickups();
+  drawEnemies();
+  drawBullets();
+  drawPlayer();
+  drawUI();
 
-    playerShoot();
-  } else if (showEndScreen) {
+  if (showEndScreen) {
     ctx.fillStyle = "white";
     ctx.font = "48px Arial";
-    ctx.textAlign = "center";
-    ctx.fillText("Game Over", width / 2, height / 2);
+    ctx.fillText("Game Over", width / 2 - 100, height / 2);
+  } else {
+    requestAnimationFrame(gameLoop);
   }
-
-  requestAnimationFrame(gameLoop);
 }
 
-// Start first wave
+// == Start game ==
 spawnWave();
-requestAnimationFrame(gameLoop);
+gameLoop();
