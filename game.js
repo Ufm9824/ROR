@@ -315,7 +315,7 @@ function shootEnemyBullet(enemy) {
 
 // == Player shooting on Spacebar ==
 function playerShoot() {
-  if (player.attackCooldown <= 0 && !timeStopActive && keys[" "]) {
+  if (player.attackCooldown <= 0 && !timeStopActive && keys["space"]) {
     const angle = player.angle;
     const speed = 10;
     bullets.push({
@@ -788,6 +788,7 @@ function gameLoop(timestamp = 0) {
 
   update(delta);
 
+  playershoot()
   drawChests();
   drawPickups();
   drawEnemies();
