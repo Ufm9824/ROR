@@ -314,7 +314,7 @@ function shootEnemyBullet(enemy) {
 }
 
 // == Player shooting on Spacebar ==
-
+function playerShoot(delta) {
   if (player.attackCooldown <= 0 && !timeStopActive && keys["space"]) {
     const angle = player.angle;
     const speed = 10;
@@ -556,7 +556,7 @@ function update(delta) {
 
     // Player can move and do things during pause, but enemies and bullets stop moving
     updatePlayer(delta);
-    playerShoot();
+    playerShoot(delta);
 
     if (waveWaitTimer <= 0) {
       waitingForNextWave = false;
@@ -576,7 +576,7 @@ function update(delta) {
   }
 
   updatePlayer(delta);
-  playerShoot();
+  playerShoot(delta);
   updateEnemies(delta);
   updateBullets(delta);
   updatePickups(delta);
@@ -792,7 +792,7 @@ function gameLoop(timestamp = 0) {
 
   update(delta);
 
-  playershoot()
+  playershoot(delta)
   drawChests();
   drawPickups();
   drawEnemies();
