@@ -314,7 +314,7 @@ function shootEnemyBullet(enemy) {
 }
 
 // == Player shooting on Spacebar ==
-function playerShoot() {
+
   if (player.attackCooldown <= 0 && !timeStopActive && keys["space"]) {
     const angle = player.angle;
     const speed = 10;
@@ -329,9 +329,11 @@ function playerShoot() {
       poison: player.hasPoisonBullets || false,
       fromEnemy: false,
     });
+    
     player.attackCooldown = player.attackSpeed;
   }
 }
+
 
 // == Pickups and chests ==
 function spawnPickup(x, y, type, value) {
