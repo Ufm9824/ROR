@@ -792,7 +792,7 @@ function gameLoop(timestamp = 0) {
 
   update(delta);
 
-  playershoot(delta)
+  playerShoot(delta)
   drawChests();
   drawPickups();
   drawEnemies();
