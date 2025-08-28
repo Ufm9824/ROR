@@ -323,8 +323,8 @@ function spawnWave(waveNumber) {
   bossKilledThisWave = false;
 
   for (let i = 0; i < enemiesToSpawn; i++) {
-    const x = Math.random() * width;
-    const y = Math.random() * height;
+    let x = Math.random() * width;
+    let y = Math.random() * height;
     // Spawn enemies at edges only
     if (x > 100 && x < width - 100 && y > 100 && y < height - 100) {
       // push to edge
@@ -337,6 +337,7 @@ function spawnWave(waveNumber) {
     enemies.push(new Enemy(x, y, 20, 2 + waveNumber * 0.1, 30 + waveNumber * 5, 10));
   }
 }
+
 
 // == Shooting bullets ==
 function shootBullet() {
