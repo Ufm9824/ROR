@@ -554,6 +554,7 @@ function update(delta) {
 
     // Player can move and do things during pause, but enemies and bullets stop moving
     updatePlayer(delta);
+    playerShoot();
 
     if (waveWaitTimer <= 0) {
       waitingForNextWave = false;
@@ -573,6 +574,7 @@ function update(delta) {
   }
 
   updatePlayer(delta);
+  playerShoot();
   updateEnemies(delta);
   updateBullets(delta);
   updatePickups(delta);
