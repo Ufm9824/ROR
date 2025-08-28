@@ -1,29 +1,47 @@
-/* Reset default margins/padding */
-* {
+/* style.css */
+
+html, body {
   margin: 0;
   padding: 0;
-  box-sizing: border-box;
-}
-
-/* Make html and body fill the entire viewport */
-html, body {
-  width: 100%;
-  height: 100%;
   overflow: hidden;
-  background-color: #000; /* black background */
+  background-color: #000;
+  height: 100%;
+  width: 100%;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  color: white;
+  color: #fff;
+  user-select: none; /* disable text selection */
 }
 
-/* Canvas fills the whole window */
 canvas#game {
   display: block;
+  background-color: #111;
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: #111; /* dark gray background */
-  user-select: none; /* prevent text selection on drag */
-  cursor: crosshair; /* pointer style for gameplay */
+  image-rendering: pixelated; /* sharp pixels if you want a pixel art style */
+}
+
+/* Optional: Styling HUD or game text */
+#hud {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  font-size: 16px;
+  color: #eee;
+  text-shadow: 0 0 5px #00ffcc;
+  pointer-events: none;
+}
+
+/* Optional: End screen style */
+#end-screen {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 32px;
+  color: #f00;
+  text-align: center;
+  text-shadow: 0 0 10px #ff0000;
 }
