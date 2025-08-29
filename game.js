@@ -587,15 +587,16 @@ function update(delta) {
   }
 
 if (enemiesKilledThisWave >= enemiesToSpawn) {
-  if (!chestSpawnedThisWave) {
-    chestSpawnedThisWave = true; // ✅ Guard it from running more than once
-    if (Math.random() < 0.5) {
-      spawnChest();
+  if (!waitingForNextWave) { // Only start waiting once
+    if (!chestSpawnedThisWave) {
+      chestSpawnedThisWave = true;
+      if (Math.random() < 0.5) {
+        spawnChest();
+      }
     }
+    waitingForNextWave = true;
+    waveWaitTimer = 3000;
   }
-
-  waitingForNextWave = true;
-  waveWaitTimer = 3000;
 }
 
   if (bossKilledThisWave && !portal) {
