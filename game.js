@@ -896,6 +896,19 @@ function draw() {
 }
 
 // Main game loop
+function gameLoop(currentTime) {
+  if (!lastTime) lastTime = currentTime;  // initialize at first frame
+  let delta = currentTime - lastTime;
+  lastTime = currentTime;
+
+  update(delta);
+  draw();
+
+  requestAnimationFrame(gameLoop);
+}
+
+requestAnimationFrame(gameLoop);
+
 lastTime = performance.now();
 function gameLoop(time) {
   const delta = time - lastTime;
