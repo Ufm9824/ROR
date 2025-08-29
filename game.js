@@ -815,3 +815,93 @@ function gameLoop(timestamp = 0) {
 // == Start game ==
 spawnWave();
 gameLoop();
+
+// Tooltips for upgrades
+function upgradeTooltipText(key) {
+  switch (key) {
+    case "attackSpeed":
+      return "Attack Speed: Faster shooting";
+    case "attackDamage":
+      return "Attack Damage: More damage per shot";
+    case "maxHealth":
+      return "Max Health: Increases your max HP";
+    case "healthRegen":
+      return "Health Regen: Gradual healing over time";
+    case "bulletRange":
+      return "Bullet Range: Bullets last longer";
+    case "explosiveBullets":
+      return "Explosive Bullets: Damage enemies in radius";
+    case "poisonBullets":
+      return "Poison Bullets: Poison enemies";
+    case "timeStop":
+      return "Time Stop: Temporarily freeze enemies";
+    case "focus":
+      return "Focus: Improves Time Stop upgrades";
+    default:
+      return "Unknown Upgrade";
+  }
+}
+
+// Draw portal
+function drawPortal(x, y, w, h) {
+  ctx.save();
+  ctx.strokeStyle = "cyan";
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.arc(x, y, 40, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// Game over screen
+function drawGameOver() {
+  ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+  ctx.fillRect(0, 0, width, height);
+  ctx.fillStyle = "white";
+  ctx.font = "48px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText("Game Over", width / 2, height / 2 - 20);
+  ctx.font = "24px Arial";
+  ctx.fillText(`Kills: ${stats.kills}`, width / 2, height / 2 + 20);
+  ctx.fillText(`Damage Dealt: ${stats.damage}`, width / 2, height / 2 + 50);
+  ctx.fillText(`Gold Earned: ${stats.coinsEarned}`, width / 2, height / 2 + 80);
+  ctx.fillText("Refresh page to play again", width / 2, height / 2 + 140);
+}
+
+// Main draw function
+function draw() {
+  ctx.clearRect(0, 0, width, height);
+
+  if (showEndScreen) {
+    drawGameOver();
+    return;
+  }
+
+  drawPlayer();
+  drawEnemies();
+  drawBullets();
+  drawPickups();
+  drawChests();
+
+  if (portal) {
+    drawPortal(portal.x, portal.y, portal.w, portal.h);
+  }
+
+  drawUI();
+}
+
+// Main game loop
+let lastTime = performance.now();
+function gameLoop(time) {
+  const delta = time - lastTime;
+  lastTime = time;
+
+  update(delta);
+  draw();
+
+  requestAnimationFrame(gameLoop);
+}
+
+// Start the game
+spawnWave();
+gameLoop(lastTime);
