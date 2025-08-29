@@ -535,7 +535,6 @@ function spawnPortal() {
 }
 
 // == Update and game loop ==
-let lastTime = 0;
 
 function update(delta) {
   if (gameOver) return;
@@ -785,9 +784,12 @@ function upgradeTooltipText(key) {
   }
 }
 
+let lastTime = 0
+
 // == Main loop ==
 function gameLoop(timestamp = 0) {
   if (!lastTime) lastTime = timestamp;
+  
   const delta = timestamp - lastTime;
   lastTime = timestamp;
 
