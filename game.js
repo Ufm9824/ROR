@@ -893,7 +893,7 @@ function draw() {
 }
 
 // Main game loop
-let lastTime = performance.now();
+lastTime = performance.now();
 function gameLoop(time) {
   const delta = time - lastTime;
   lastTime = time;
