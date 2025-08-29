@@ -784,7 +784,7 @@ function upgradeTooltipText(key) {
   }
 }
 
-let lastTime = 0
+lastTime = 0
 
 // == Main loop ==
 function gameLoop(timestamp = 0) {
@@ -893,7 +893,7 @@ function draw() {
 }
 
 // Main game loop
-lastTime = performance.now();
+let lastTime = performance.now();
 function gameLoop(time) {
   const delta = time - lastTime;
   lastTime = time;
