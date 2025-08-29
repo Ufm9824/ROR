@@ -556,7 +556,6 @@ function update(delta) {
 
     // Player can move and do things during pause, but enemies and bullets stop moving
     updatePlayer(delta);
-    playerShoot(delta);
 
     if (waveWaitTimer <= 0) {
       waitingForNextWave = false;
@@ -586,13 +585,17 @@ function update(delta) {
     player.attackCooldown -= delta;
   }
 
-  if (enemiesKilledThisWave >= enemiesToSpawn) {
-    if (!chestSpawnedThisWave && Math.random() < 0.5) {
+if (enemiesKilledThisWave >= enemiesToSpawn) {
+  if (!chestSpawnedThisWave) {
+    chestSpawnedThisWave = true; // ✅ Guard it from running more than once
+    if (Math.random() < 0.5) {
       spawnChest();
     }
-    waitingForNextWave = true;
-    waveWaitTimer = 3000; // 3 seconds wait
   }
+
+  waitingForNextWave = true;
+  waveWaitTimer = 3000;
+}
 
   if (bossKilledThisWave && !portal) {
     spawnPortal();
