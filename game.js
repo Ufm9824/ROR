@@ -787,7 +787,7 @@ function upgradeTooltipText(key) {
   }
 }
 
-lastTime = 0
+let lastTime = 0
 
 // == Main loop ==
 function gameLoop(timestamp = 0) {
