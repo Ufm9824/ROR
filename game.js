@@ -904,7 +904,6 @@ function gameLoop(currentTime) {
   update(delta);
   draw();
 
-  requestAnimationFrame(gameLoop);
 }
 
 requestAnimationFrame(gameLoop);
