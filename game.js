@@ -787,7 +787,7 @@ function upgradeTooltipText(key) {
   }
 }
 
-if(lastTime) lastTime = 0
+
 
 // == Main loop ==
 function gameLoop(timestamp = 0) {
@@ -909,7 +909,7 @@ function gameLoop(currentTime) {
 
 requestAnimationFrame(gameLoop);
 
-lastTime = performance.now();
+lastTime = performance.now() * 2;
 function gameLoop(time) {
   const delta = time - lastTime;
   lastTime = time;
