@@ -538,7 +538,7 @@ function spawnPortal() {
 
 // == Update and game loop ==
 
-function update(delta) {
+/*function update(delta) {
   if (gameOver) return;
 
   if (timeStopActive) {
@@ -546,7 +546,7 @@ function update(delta) {
     if (timeStopTimer <= 0) {
       timeStopActive = false;
     }
-  }
+  }*/
 
   if (timeStopCooldown > 0) {
     timeStopCooldown -= delta;
@@ -787,10 +787,10 @@ function upgradeTooltipText(key) {
   }
 }
 
-
+timestamp = 0
 
 // == Main loop ==
-function gameLoop(timestamp = 0) {
+function gameLoop(timestamp) {
   if (!lastTime) lastTime = timestamp;
   
   const delta = timestamp - lastTime/1000;
@@ -893,17 +893,6 @@ function draw() {
   }
 
   drawUI();
-}
-
-// Main game loop
-function gameLoop(currentTime) {
-  if (!lastTime) lastTime = currentTime;  // initialize at first frame
-  let delta = currentTime - lastTime;
-  lastTime = currentTime;
-
-  update(delta);
-  draw();
-
 }
 
 requestAnimationFrame(gameLoop);
