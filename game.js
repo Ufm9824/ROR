@@ -793,7 +793,7 @@ function upgradeTooltipText(key) {
 function gameLoop(timestamp = 0) {
   if (!lastTime) lastTime = timestamp;
   
-  const delta = timestamp - lastTime;
+  const delta = timestamp - lastTime/1000;
   lastTime = timestamp;
 
   ctx.clearRect(0, 0, width, height);
